@@ -162,58 +162,43 @@ app.post('/api/check-user', async (req, res) => {
 });
 
 // Submit bet
-app.post('/api/submit-bet', async (req, res) => {
-    try {
-        const { username, bets } = req.body;
-        
-        if (!username || !bets || bets.length !== 8) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Username and 8 bets are required' 
-            });
-        }
+async function submitBet() {
+  if (selectedBets.length !== 8) {
+    alert('Please select bets for all 8 matches');
+    return;
+  }
 
-        // Check if user already has a bet
-        const existingBet = await UserBet.findOne({ username });
-        if (existingBet) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'User has already placed a bet' 
-            });
-        }
+  const cleanedBets = selectedBets.map(bet => ({
+    ...bet,
+    matchId: Number(bet.matchId)
+  }));
 
-        // Calculate total odds
-        const totalOdds = bets.reduce((total, bet) => total * bet.odds, 1);
+  try {
+    const response = await fetch(`${API_BASE_URL}/submit-bet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username: currentUser,
+        bets: cleanedBets,
+      }),
+    });
 
-        // Generate unique ticket ID
-        const ticketId = uuidv4();
+    const data = await response.json();
 
-        // Create new bet
-        const newBet = new UserBet({
-            username,
-            ticketId,
-            bets,
-            totalOdds: parseFloat(totalOdds.toFixed(2))
-        });
-
-        await newBet.save();
-
-        res.json({
-            success: true,
-            message: 'Bet submitted successfully',
-            ticket: {
-                id: ticketId,
-                username,
-                totalOdds: parseFloat(totalOdds.toFixed(2)),
-                status: 'pending',
-                createdAt: newBet.createdAt
-            }
-        });
-    } catch (error) {
-        console.error('Error submitting bet:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+    if (data.success) {
+      showTicketModal(data.ticket);
+    } else {
+      alert('Error submitting bet: ' + data.message);
     }
-});
+
+  } catch (error) {
+    console.error('Submit bet error:', error);
+    alert('Connection error. Please try again.');
+  }
+}
+
 
 // Search ticket by username
 app.post('/api/search-ticket', async (req, res) => {
