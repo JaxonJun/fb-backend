@@ -162,42 +162,52 @@ app.post('/api/check-user', async (req, res) => {
 });
 
 // Submit bet
-async function submitBet() {
-  if (selectedBets.length !== 8) {
-    alert('Please select bets for all 8 matches');
-    return;
-  }
-
-  const cleanedBets = selectedBets.map(bet => ({
-    ...bet,
-    matchId: Number(bet.matchId)
-  }));
-
+app.post('/api/submit-bet', async (req, res) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/submit-bet`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        username: currentUser,
-        bets: cleanedBets,
-      }),
-    });
+    const { username, bets } = req.body;
 
-    const data = await response.json();
+    console.log('Incoming data:', username, bets); // ✅ 添加这行看看传进来的是啥
 
-    if (data.success) {
-      showTicketModal(data.ticket);
-    } else {
-      alert('Error submitting bet: ' + data.message);
+    if (!username || !bets || bets.length !== 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and 8 bets are required',
+      });
     }
 
+    const existingBet = await UserBet.findOne({ username });
+    if (existingBet) {
+      return res.status(400).json({
+        success: false,
+        message: 'User has already placed a bet',
+      });
+    }
+
+    const totalOdds = bets.reduce((total, bet) => total * bet.odds, 1);
+    const ticketId = uuidv4();
+
+    const newBet = new UserBet({
+      username,
+      ticketId,
+      bets,
+      totalOdds: parseFloat(totalOdds.toFixed(2)),
+    });
+
+    await newBet.save(); // ❗ 很可能这里报错了（比如 DB 没连接）
+
+    res.json({
+      success: true,
+      ticket: ticketId,
+    });
+
   } catch (error) {
-    console.error('Submit bet error:', error);
-    alert('Connection error. Please try again.');
+    console.error('Error in /submit-bet:', error); // ✅ 打印具体报错
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+    });
   }
-}
+});
 
 
 // Search ticket by username
